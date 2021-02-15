@@ -1,0 +1,195 @@
+
+
+
+
+```{r}
+rm(list=ls())
+library(msm)
+data_cleaned= read.csv("data_cleaned.csv")
+#data_cleaned = read.csv("data_cleaned_simplified.csv")
+#data_cleaned = read.csv("sample.csv")
+
+```
+
+
+
+### Load msm package:
+
+```{r}
+library("msm")
+data_msm = data_cleaned
+```
+
+### Frequency table of pairs of consecutive states
+
+```{r}
+library(xtable)
+data_temp = data_cleaned
+#data_temp$state[data_temp$state == 1] = "HEALTHY"
+#data_temp$state[data_temp$state == 2] = "WP"
+#data_temp$state[data_temp$state == 3] = "PM/DEAD"
+
+data_frequency_table = statetable.msm(state,coral,data_temp)
+data_frequency_table
+print(xtable(data_frequency_table,type='latex'))
+
+               
+```
+
+
+
+
+
+
+
+```{r}
+
+statetable.msm(state,coral,data_msm)
+Q <- rbind ( c(1,1,1 ),c(1,1,1),c(0,0,0))
+print("Transition indicator matrix")
+print(Q)
+# make partial mortality combined with dead
+# optional
+Q.crude <- crudeinits.msm(state ~months, coral, data=data_msm, qmatrix=Q)
+Q.crude
+```
+
+
+
+```{r}
+coral.msm <- msm( state ~ months, subject=coral, data = data_msm,control=list(maxit = 500,fnscale=5000,trace = 1, report = 1),qmatrix = Q.crude)
+coral.msm
+```
+
+
+
+```{r}
+#coral.msm <- msm( state ~ months, subject=coral, data = data_msm,  control=list(maxit = 1000,fnscale=500,trace = 1, report = 1,reltol = 1e-8),qmatrix = Q.crude,covariates = ~ bur_coral + bl_coral+control,covinits = list(bur_coral = c(1,1,0,0),bl_coral = c(1,1,0,0)),fixedpars = c(7,8,11,12,17,20,21,24),pci=c(5,10))
+
+#coral.msm <- msm( state ~ months, subject=coral, data = data_msm,  control=list(maxit = 1000,fnscale=500,trace = 1, report = 1,reltol = 1e-8),qmatrix = Q.crude,covariates = ~ bur_coral + bl_coral+control,pci = c(5,10))
+#fixed_par = c(7,8,11,12,19,20,23,24,27,28,31,32,35,36,39,40,43,44)
+
+
+#coral.msm <- msm( state ~ months, subject=coral, data = data_msm,  control=list(maxit = 1000,fnscale=500,trace = 1, report = 1,reltol = 1e-8),qmatrix = Q.crude,covariates = ~ bur_coral + bl_coral+control,covinits = list(bur_coral = c(1,1,0,0),bl_coral = c(1,1,0,0)),fixedpars = fixed_par,pci=c(3,4,5,6,7,8,9))
+
+#coral.msm <- msm( state ~ months, subject=coral, data = data_msm,  control=list(maxit = 1000,fnscale=500,trace = 1, report = 1,reltol = 1e-8),qmatrix = Q.crude,covariates = ~ bur_coral + bl_coral+control,covinits = list(bur_coral = c(1,1,1,1),bl_coral = c(1,1,1,1)),pci = c(10))
+
+
+coral.msm <- msm( state ~ months, subject=coral, data = data_msm,  control=list(maxit = 1000,fnscale=500,trace = 1, report = 1,reltol = 1e-8),qmatrix = Q.crude,covariates = ~ bur_coral + bl_coral+control,covinits = list(bur_coral = c(1,1,1,1),bl_coral = c(1,1,1,1)),pci = c(5,10,15))
+
+coral.msm
+```
+
+```{r}
+
+
+# baseline hazard for "HEALTHY" to "WP"
+res = 0.006406*18.0971
+upper = 0.01135*37.5427
+lower = 0.003614*8.72352
+
+
+# baseline hazard for "HEALTHY" to "PM/DEAD"
+res = summary(coral.msm)
+baseline=c(0.026328,0.016826, 0.04119)
+baseline*res$hazard$`timeperiod[5,10)`[2,]
+baseline*res$hazard$`timeperiod[10,15)`[2,]
+baseline*res$hazard$`timeperiod[15,Inf)`[2,]
+
+
+
+
+
+
+
+
+```
+
+
+
+```{r}
+#summary(coral.msm)
+
+res = summary(coral.msm)
+res$hazard
+a = res$hazard$bl_coral
+#a[a==1] = '/'
+print(xtable(a,type='latex'))
+
+#write.csv(a,"~/Downloads/test.csv")
+b =res$hazard$bur_coral
+#b[b==1] = '/'
+#write.csv(b,"~/Downloads/test2.csv")
+print(xtable(b,type='latex'))
+c = res$hazard$control
+#c[c==1] = '/'
+print(xtable(c,type='latex'))
+#write.csv(c,"~/Downloads/test3.csv")
+
+d = res$hazard$`timeperiod[5,10)`
+#d[d==1] = '/'
+print(xtable(d,type='latex'))
+#write.csv(d,"~/Downloads/test4.csv")
+
+e = res$hazard$`timeperiod[10,Inf)`
+#e[e==1] = '/'
+#write.csv(e,"~/Downloads/test5.csv")
+print(xtable(e,type='latex'))
+
+```
+
+
+
+
+
+```{r}
+pmatrix.msm(coral.msm, t=5)
+```
+
+
+#### Mean sojourn times
+
+The function sojourn.msm extracts the estimated mean sojourn times in each transient state r, for a given set of covariate values.
+
+```{r}
+sojourn.msm(coral.msm)
+```
+
+
+# Hazard ratio of the bleaching, buried, and control covariates
+
+
+
+```{r}
+hazard.msm(coral.msm)
+```
+
+
+# Survival plot
+
+an important use of multi-state models is in predicting the probability of survival for patients in increasingly severe states of disease, for some time t in the future. This can be obtained directly from the transition probability matrix P(t).
+
+```{r}
+plot(coral.msm, legend.pos=c(8, 1))
+```
+
+# Goodness of fit
+# Observed and expected prevalence
+```{r}
+prevalence.msm(coral.msm,times = seq(0,20,1))
+plot.prevalence.msm(coral.msm,mintime = 0, maxtime = 20,legend.pos = c(0,100))
+```
+# Pearson-type goodness-of-fit
+
+
+# cut the interval and redo.
+
+```{r}
+pearson.msm(coral.msm)
+```
+
+
+
+
+
+
